@@ -1,0 +1,98 @@
+version: '3'
+services:
+    pgadmin-compose:
+        container_name: pgadmin_container
+        image: dpage/pgadmin4:5.7
+        environment:
+            PGADMIN_DEFAULT_EMAIL: "test@gmail.com"
+            PGADMIN_DEFAULT_PASSWORD: "test123!"
+            PGADMIN_CONFIG_SERVER_MODE: "True"
+        volumes:
+            - ./pgadmin:/var/lib/pgadmin
+        ports:
+            - 16543:80
+        restart: unless-stopped
+        depends_on:
+            - postgres_container
+        deploy:
+            resources:
+                limits:
+                    cpus: '0.5'
+                    memory: 1G
+        networks:
+            - postgres
+
+    postgres_container:
+        container_name: postgres_container
+        image: postgres:13.3
+        command:
+            - "postgres"
+            - "-c"
+            - "max_connections=50"
+            - "-c"
+            - "shared_buffers=1GB"
+            - "-c"
+            - "effective_cache_size=4GB"
+            - "-c"
+            - "work_mem=16MB"
+            - "-c"
+            - "maintenance_work_mem=512MB"
+            - "-c"
+            - "random_page_cost=1.1"
+            - "-c"
+            - "temp_file_limit=10GB"
+            - "-c"
+            - "log_min_duration_statement=200ms"
+            - "-c"
+            - "idle_in_transaction_session_timeout=10s"
+            - "-c"
+            - "lock_timeout=1s"
+            - "-c"
+            - "statement_timeout=60s"
+            - "-c"
+            - "shared_preload_libraries=pg_stat_statements"
+            - "-c"
+            - "pg_stat_statements.max=10000"
+            - "-c"
+            - "pg_stat_statements.track=all"
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "pg_isready",
+                    "-q",
+                    "-d",
+                    "postgres",
+                    "-U",
+                    "test"
+                ]
+            timeout: 45s
+            interval: 10s
+            retries: 10
+        restart: unless-stopped
+        environment:
+            POSTGRES_USER: "test"
+            POSTGRES_PASSWORD: "test"
+            POSTGRES_DB: "test"
+            APP_DB_USER: "test_collect_data"
+            APP_DB_PASS: "test_collect_data"
+            APP_DB_NAME: "test_collect_data"
+        #            PGDATA: "/var/lib/postgresql/data/pgdata"
+        volumes:
+            #            - .:/var/lib/postgresql/data
+            - ./db:/docker-entrypoint-initdb.d/
+        ports:
+            - "5434:5432" # 5434 - это внешний порт, который будет открыт на HOST (чтобы не было конфликтов с подключением в Постгрес выше) и 5432 - это порт, открытый на контейнере (на нем работает Постгрес)
+        expose:
+            - 5434
+        deploy:
+            resources:
+                limits:
+                    cpus: '1'
+                    memory: 4G
+        networks:
+            - postgres
+
+networks:
+    postgres:
+        driver: bridge
