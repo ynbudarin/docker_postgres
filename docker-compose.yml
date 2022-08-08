@@ -1,31 +1,36 @@
-version: '3'
-services:
-    pgadmin-compose:
-        container_name: pgadmin_container
-        image: dpage/pgadmin4:5.7
-        environment:
-            PGADMIN_DEFAULT_EMAIL: "test@gmail.com"
+# более подробно читать - https://docs.docker.com/compose/compose-file/compose-file-v3/
+
+version: '3'    # Версия Docker API
+services:       # Сервисы которые мы будем запускать
+    pgadmin-compose:                                # Первый сервис - pgadmin-compose (его имя)
+        container_name: pgadmin_container           # ещё раз указываем имя (но не обязательно)
+        image: dpage/pgadmin4:5.7                   # основание создания сервиса (или image или build)
+      # build: .                    # собрать на основании Dockerfile (. - лежит в этой же дериктории)
+        environment:                                # Переменные окружения
+            PGADMIN_DEFAULT_EMAIL: "test@gmail.com" # логин/пароль ВЭБ-клиента
             PGADMIN_DEFAULT_PASSWORD: "test123!"
             PGADMIN_CONFIG_SERVER_MODE: "True"
-        volumes:
-            - ./pgadmin:/var/lib/pgadmin
-        ports:
-            - 16543:80
-        restart: unless-stopped
+        volumes:                                # создает устройство в Docker и монтирует его в директорию
+            - ./pgadmin:/var/lib/pgadmin        # Монтируем локальную директорию ./pgadmin в директорию внутри контейнера /var/lib/pgadmin 
+        ports:                                  # проброс портов
+            - 16543:80                          # внутренний порт сервиса 80 пусть будет доступен из вне по 16543 
+        restart: unless-stopped                 # всегда перезапускать сервис, пока работает контейнер
         depends_on:
-            - postgres_container
+            - postgres_container                # Зависит от сервиса postgres_container - запускаться после его старта
         deploy:
             resources:
-                limits:
-                    cpus: '0.5'
-                    memory: 1G
+                limits:                         # ограничения на использования ресурсов
+                    cpus: '0.5'                 # 50% of a single core
+                    memory: 1G                  # менее 1Гб ОЗУ
         networks:
-            - postgres
+            - postgres                          # сеть, в которой работает сервис
 
-    postgres_container:
+    postgres_container:                         # Второй сервис - postgres_container (его имя)
         container_name: postgres_container
         image: postgres:13.3
-        command:
+        command:                                # тюнинг параметров БД или можно указать свой postgresql.conf
+        # Посмотреть список установленных расширений можно с помощью запроса select * from pg_extension;
+        # узнать текущее значение того или иного параметра, например: show random_page_cost;
             - "postgres"
             - "-c"
             - "max_connections=50"
@@ -55,7 +60,7 @@ services:
             - "pg_stat_statements.max=10000"
             - "-c"
             - "pg_stat_statements.track=all"
-        healthcheck:
+        healthcheck:    # Проверка состояния/работоспособности! Стратегия решения проблемы – перезапуск контейнера.
             test:
                 [
                     "CMD",
@@ -70,29 +75,33 @@ services:
             interval: 10s
             retries: 10
         restart: unless-stopped
-        environment:
-            POSTGRES_USER: "test"
+        environment:                            # Переменные окружения
+            POSTGRES_USER: "test"               # создаст БД и пользователя для работы c помощью скрипта 01-init.sh
             POSTGRES_PASSWORD: "test"
             POSTGRES_DB: "test"
-            APP_DB_USER: "test_collect_data"
+            APP_DB_USER: "test_collect_data"    # создаст БД и пользователя для работы c помощью скрипта 01-init.sh
             APP_DB_PASS: "test_collect_data"
             APP_DB_NAME: "test_collect_data"
-        #            PGDATA: "/var/lib/postgresql/data/pgdata"
+        #   PGDATA: "/var/lib/postgresql/data/pgdata"  # переопределяю переменную окружения PGDATA (папка с файлами БД)
         volumes:
-            #            - .:/var/lib/postgresql/data
-            - ./db:/docker-entrypoint-initdb.d/
+            - postgres-db:/var/lib/postgresql/data     # пусть все данные БД "сыпяться" в volume от Docker (указал имя volume ниже в конфиге)
+            #            - .:/var/lib/postgresql/data   # Монтируем локальную директорию ./ в директорию внутри контейнера /var/lib/postgresql/data
+            - ./db:/docker-entrypoint-initdb.d/         # инициализация БД - подсунем ему свой скрипт 01-init.sh
         ports:
-            - "5434:5432" # 5434 - это внешний порт, который будет открыт на HOST (чтобы не было конфликтов с подключением в Постгрес выше) и 5432 - это порт, открытый на контейнере (на нем работает Постгрес)
-        expose:
-            - 5434
+            - "5434:5432"       # внутренний порт сервиса 5432 пусть будет доступен из вне по 5434 
+        expose:                          
+            - 5434              # Открыть снаружи (подключаться к контейнеру с локал.ПК) - порт 5434
         deploy:
             resources:
                 limits:
                     cpus: '0.5'
                     memory: 4G
         networks:
-            - postgres
+            - postgres              # сеть, в которой работает сервис
 
 networks:
-    postgres:
-        driver: bridge
+    postgres:                       # Настроить нашу сеть
+        driver: bridge              # у нас локальный ПК и нам хватит тип сети - мост
+
+volumes:
+    postgres-db:                    # docker будет создавать volume с именем postgres-db
